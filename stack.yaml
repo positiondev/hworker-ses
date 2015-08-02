@@ -1,0 +1,8 @@
+flags: {}
+packages:
+- '.'
+- location:
+    git: https://github.com/dbp/hworker
+    commit: 63c39c5ab3cbeb88eaefe50440c5fe1b509536d8
+extra-deps: []
+resolver: nightly-2015-07-03
