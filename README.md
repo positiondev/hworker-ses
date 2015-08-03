@@ -1,9 +1,9 @@
 ## About
 
 This is a library that facilitates sending email via AWS SES using the
-background processor `Hworker`. In particular, it handles rate
-limiting (for sending rate currently, not daily quotas), as SES does
-not queue messages.
+background processor [hworker](https://github.com/dbp/hworker). In
+particular, it handles rate limiting (for sending rate currently, not
+daily quotas), as SES does not queue messages.
 
 ## Rate limiting
 
@@ -26,3 +26,48 @@ so eventually it will go out. But it's wasteful (as you can know in advance
 if a given message will actually be able to be sent), and if you really
 mess it up (ie, set an absurdly high limit), you potentially will have
 your API calls rate limited, which isn't good.
+
+## Usage
+
+The program is `example/Main.hs` is probably most of what you need to get
+started. In particular, you create an `hworker` (you need to give it a
+name for the queue - this should be shared by any servers that should be
+accessing the same queue and sending the same messages, though if you are
+sharing the redis server with other applications, this should be distinct).
+The third argument is the per-second rate limit for this server, and the
+last argument is the address that the messages are sent from.
+
+Using what you get back, you can spawn workers and a monitor. Then you
+can queue as many messages as you want, and they will be sent out by
+the workers.
+
+You need to start at least one worker thread and at least
+one monitor thread. You can have as many of these as you want, though
+generally speaking, having more than one monitor thread per server is
+probably overkill (for the system to work, you want at least one
+monitor running _somewhere_ - so if a whole server crashes, you want
+there to be a monitor elsewhere). Having many workers makes things run
+faster. In particular, if you have a high sending limit, you will
+probably want several workers.
+
+As specified in the [hworker](https://github.com/dbp/hworker)
+documentation, the semantics of this queue is at-least-once, so it's
+possible that messages can get sent multiple times in error conditions
+(like if an entire server crashes right after the message is sent, but
+before the fact that it was sent is acknowledged). But, provided that
+redis is still available and is reliable, messages that have been
+queued are guaranteed to get sent eventually (even in the case of
+servers crashing, etc). The only caveat to that is that for the
+message to get sent at least one worker and one monitor thread must be
+running (thoses don't need to be running all the time, but as long as
+they aren't running, messages might be delayed. Once they're started again,
+those delayed messages will go out).
+
+## Primary Libraries Used
+
+- hworker
+- amazonka-ses
+
+## Contributors
+
+- Daniel Patterson <dbp@dbpmail.net>
