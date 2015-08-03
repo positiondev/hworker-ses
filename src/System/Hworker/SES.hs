@@ -5,8 +5,7 @@ module System.Hworker.SES where
 
 import           Control.Arrow           ((&&&))
 import           Control.Concurrent      (threadDelay)
-import           Control.Concurrent.MVar (MVar, modifyMVar, modifyMVar_,
-                                          newMVar)
+import           Control.Concurrent.MVar (MVar, newMVar, putMVar, takeMVar)
 import           Control.Lens            (set)
 import           Control.Monad.Trans.AWS hiding (page)
 import           Data.Aeson              (FromJSON, ToJSON)
@@ -33,13 +32,12 @@ instance FromJSON SESJob
 instance Job SESState SESJob where
   job state@(SESState limit source recents) j@(SESJob to subj btxt bhtml) =
     do now <- getCurrentTime
-       count <- length <$> modifyMVar recents
-                                      (return .
-                                       (id &&& id) .
-                                       filter ((> 60) . diffUTCTime now))
-       if count > limit
-          then threadDelay 100000 >> job state j
-          else do modifyMVar_ recents (return . (now:))
+       rs <- takeMVar recents
+       let active = filter ((< 1) . diffUTCTime now) rs
+       let count = length active
+       if count >= limit
+          then putMVar recents active >> threadDelay 100000 >> job state j
+          else do putMVar recents (now : active)
                   awsenv <- getEnv NorthVirginia Discover
                   r <- runAWST awsenv $
                        send (sendEmail source
