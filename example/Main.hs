@@ -9,7 +9,7 @@ import           System.Hworker     hiding (create)
 import           System.Hworker.SES
 
 main :: IO ()
-main = do hw <- create "ses-example" 2 "Daniel Patterson <dbp@dbpmail.net>"
+main = do hw <- create "ses-example" 2 "Daniel Patterson <dbp@dbpmail.net>" print
           forkIO (worker hw)
           forkIO (worker hw)
           forkIO (worker hw)

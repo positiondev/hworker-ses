@@ -19,7 +19,9 @@ import qualified System.Hworker          as Hworker (create)
 
 data SESState = SESState { sesLimit   :: Int
                          , sesSource  :: Text
-                         , sesRecents :: MVar [UTCTime] }
+                         , sesRecents :: MVar [UTCTime]
+                         , sesAfter   :: SESJob -> IO ()
+                         }
 data SESJob = SESJob { sesEmTo       :: Text
                      , sesEmSubj     :: Text
                      , sesEmBodyText :: Maybe Text
@@ -30,7 +32,7 @@ instance ToJSON SESJob
 instance FromJSON SESJob
 
 instance Job SESState SESJob where
-  job state@(SESState limit source recents) j@(SESJob to subj btxt bhtml) =
+  job state@(SESState limit source recents after) j@(SESJob to subj btxt bhtml) =
     do now <- getCurrentTime
        rs <- takeMVar recents
        let active = filter ((< 1) . diffUTCTime now) rs
@@ -53,9 +55,10 @@ instance Job SESState SESJob where
                     Left err ->
                       do print err
                          return (Failure (T.pack (show err)))
-                    Right _ -> return Success
+                    Right _ -> do after j
+                                  return Success
 
-create :: Text -> Int -> Text -> IO (Hworker SESState SESJob)
-create name limit source =
+create :: Text -> Int -> Text -> (SESJob -> IO ()) -> IO (Hworker SESState SESJob)
+create name limit source after =
   do recents <- newMVar []
-     Hworker.create name (SESState limit source recents)
+     Hworker.create name (SESState limit source recents after)
