@@ -19,7 +19,7 @@ main = do hw <- create "ses-example" 2 "Daniel Patterson <dbp@dbpmail.net>" prin
                                         ("Message #" <> T.pack (show n) <> "")
                                         (Just "Hi Daniel, this is the message in text.\n\n")
                                         (Just "<h2>Hi Daniel, this is the message in html.</h2>")
-                                        ("hello" :: T.Text, n :: Int)))
+                                        (Right ("hello" :: T.Text, n :: Int))))
                 [1..10]
           putStrLn "Waiting 20 seconds..."
           threadDelay 20000000

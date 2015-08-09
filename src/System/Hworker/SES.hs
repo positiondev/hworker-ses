@@ -13,6 +13,7 @@ module System.Hworker.SES ( SESWorker
                           , monitor
     ) where
 
+import           Control.Applicative     ((<|>))
 import           Control.Arrow           ((&&&))
 import           Control.Concurrent      (threadDelay)
 import           Control.Concurrent.MVar (MVar, newMVar, putMVar, takeMVar)
@@ -20,7 +21,9 @@ import           Control.Lens            (set)
 import           Control.Monad           (mzero)
 import           Control.Monad.Trans.AWS hiding (page)
 import           Data.Aeson              (FromJSON (..), ToJSON (..),
-                                          Value (Object), object, (.:), (.=))
+                                          Value (Object, String), object, (.:),
+                                          (.=))
+import qualified Data.HashMap.Strict     as HashMap
 import           Data.Text               (Text)
 import qualified Data.Text               as T
 import           Data.Time.Clock         (UTCTime, diffUTCTime, getCurrentTime)
@@ -42,23 +45,24 @@ data SESJob a = SESJob { sesEmTo       :: Text
                        , sesEmSubj     :: Text
                        , sesEmBodyText :: Maybe Text
                        , sesEmBodyHtml :: Maybe Text
-                       , sesPayload    :: a
+                       , sesPayload    :: Either Value a
                        }
               deriving (Generic, Show)
 instance ToJSON a => ToJSON (SESJob a) where
   toJSON SESJob{..} = object [ "v" .= (1 :: Int)
-                             , "to" .= sesEmTo
-                             , "subj" .= sesEmSubj
-                             , "text" .= sesEmBodyText
-                             , "html" .= sesEmBodyHtml
-                             , "payload" .= sesPayload
+                             , "t" .= sesEmTo
+                             , "s" .= sesEmSubj
+                             , "x" .= sesEmBodyText
+                             , "h" .= sesEmBodyHtml
+                             , ("p", either id toJSON sesPayload)
                              ]
 instance FromJSON a => FromJSON (SESJob a) where
-  parseJSON (Object v) = SESJob <$> v .: "to"
-                                <*> v .: "subj"
-                                <*> v .: "text"
-                                <*> v .: "html"
-                                <*> v .: "payload"
+  parseJSON (Object v) = SESJob <$> v .: "t"
+                                <*> v .: "s"
+                                <*> v .: "x"
+                                <*> v .: "h"
+                                <*> ((Right <$> (v .: "p")) <|>
+                                     pure (Left (HashMap.lookupDefault (String "No 'p' field.") "p" v)))
   parseJSON _ = mzero
 
 instance (ToJSON a, FromJSON a, Show a) => Job (SESState a) (SESJob a) where
