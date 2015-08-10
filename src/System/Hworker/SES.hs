@@ -17,6 +17,7 @@ import           Control.Applicative     ((<|>))
 import           Control.Arrow           ((&&&))
 import           Control.Concurrent      (threadDelay)
 import           Control.Concurrent.MVar (MVar, newMVar, putMVar, takeMVar)
+import           Control.Exception       (SomeException, catch)
 import           Control.Lens            (set)
 import           Control.Monad           (mzero)
 import           Control.Monad.Trans.AWS hiding (page)
@@ -24,6 +25,7 @@ import           Data.Aeson              (FromJSON (..), ToJSON (..),
                                           Value (Object, String), object, (.:),
                                           (.=))
 import qualified Data.HashMap.Strict     as HashMap
+import           Data.Monoid             ((<>))
 import           Data.Text               (Text)
 import qualified Data.Text               as T
 import           Data.Time.Clock         (UTCTime, diffUTCTime, getCurrentTime)
@@ -89,7 +91,9 @@ instance (ToJSON a, FromJSON a, Show a) => Job (SESState a) (SESJob a) where
                     Left err ->
                       do print err
                          return (Failure (T.pack (show err)))
-                    Right _ -> do after j
+                    Right _ -> do catch (after j)
+                                        (\(e::SomeException) ->
+                                           putStrLn ("hworker-ses callback raised exception: " <> show e))
                                   return Success
 
 create :: (ToJSON a, FromJSON a, Show a)
