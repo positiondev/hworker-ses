@@ -11,6 +11,7 @@ module System.Hworker.SES ( SESWorker
                           , queue
                           , worker
                           , monitor
+                          , jobs
     ) where
 
 import           Control.Applicative     ((<|>))
