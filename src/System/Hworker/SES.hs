@@ -1,13 +1,18 @@
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 module System.Hworker.SES ( SESWorker
                           , SESWorkerWith
                           , SESState
                           , SESJob(..)
+                          , SESConfig(..)
+                          , RedisConnection(..)
+                          , defaultSESConfig
                           , create
+                          , createWith
                           , queue
                           , worker
                           , monitor
@@ -32,8 +37,8 @@ import qualified Data.Text               as T
 import           Data.Time.Clock         (UTCTime, diffUTCTime, getCurrentTime)
 import           GHC.Generics
 import           Network.AWS.SES         hiding (Success)
-import           System.Hworker          hiding (create)
-import qualified System.Hworker          as Hworker (create)
+import           System.Hworker          hiding (create, createWith)
+import qualified System.Hworker          as Hworker (create, createWith)
 
 type SESWorkerWith a = Hworker (SESState a) (SESJob a)
 type SESWorker = SESWorkerWith ()
@@ -97,6 +102,32 @@ instance (ToJSON a, FromJSON a, Show a) => Job (SESState a) (SESJob a) where
                                            putStrLn ("hworker-ses callback raised exception: " <> show e))
                                   return Success
 
+data SESConfig a =
+     SESConfig { sesconfigName             :: Text
+               , sesconfigLimit            :: Int
+               , sesconfigSource           :: Text
+               , sesconfigAfter            :: (SESJob a -> IO ())
+               , sesconfigLogger           :: (forall a. Show a => a -> IO ())
+               , sesconfigFailedQueueSize  :: Int
+               , sesconfigRedisConnectInfo :: RedisConnection
+               }
+
+defaultSESConfig :: (ToJSON a, FromJSON a, Show a)
+                 => Text
+                 -> Int
+                 -> Text
+                 -> (SESJob a -> IO ())
+                 -> SESConfig a
+defaultSESConfig name limit source after =
+  let d = defaultHworkerConfig name ()
+  in SESConfig name
+               limit
+               source
+               after
+               (hwconfigLogger d)
+               (hwconfigFailedQueueSize d)
+               (hwconfigRedisConnectInfo d)
+
 create :: (ToJSON a, FromJSON a, Show a)
        => Text
        -> Int
@@ -106,3 +137,16 @@ create :: (ToJSON a, FromJSON a, Show a)
 create name limit source after =
   do recents <- newMVar []
      Hworker.create name (SESState limit source recents after)
+
+createWith :: (ToJSON a, FromJSON a, Show a)
+           => SESConfig a
+           -> IO (SESWorkerWith a)
+createWith (SESConfig name limit source after logger failed redis) =
+  do recents <- newMVar []
+     Hworker.createWith
+               (defaultHworkerConfig name
+                                     (SESState limit source recents after)) {
+                                     hwconfigRedisConnectInfo = redis
+                                    ,hwconfigFailedQueueSize = failed
+                                    ,hwconfigLogger = logger
+               }

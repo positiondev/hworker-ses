@@ -3,6 +3,6 @@ packages:
 - '.'
 - location:
     git: https://github.com/dbp/hworker
-    commit: f17c9adc08e1ebde35dc466f924b156e43b3a50f
+    commit: 58bea58a203f38d510372411c85c24f79b93dd68
 extra-deps: []
 resolver: nightly-2015-07-03
