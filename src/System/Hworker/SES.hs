@@ -47,6 +47,7 @@ data SESState a = SESState { sesLimit   :: Int
                            , sesSource  :: Text
                            , sesRecents :: MVar [UTCTime]
                            , sesAfter   :: SESJob a -> IO ()
+                           , sesLogger  :: forall a. Show a => a -> IO ()
                            }
 
 data SESJob a = SESJob { sesEmTo       :: Text
@@ -74,7 +75,7 @@ instance FromJSON a => FromJSON (SESJob a) where
   parseJSON _ = mzero
 
 instance (ToJSON a, FromJSON a, Show a) => Job (SESState a) (SESJob a) where
-  job state@(SESState limit source recents after) j@(SESJob to subj btxt bhtml payload) =
+  job state@(SESState limit source recents after log) j@(SESJob to subj btxt bhtml payload) =
     do now <- getCurrentTime
        rs <- takeMVar recents
        let active = filter ((< 1) . diffUTCTime now) rs
@@ -95,11 +96,11 @@ instance (ToJSON a, FromJSON a, Show a) => Job (SESState a) (SESJob a) where
                                                      body)))
                   case r of
                     Left err ->
-                      do print err
+                      do log err
                          return (Failure (T.pack (show err)))
                     Right _ -> do catch (after j)
                                         (\(e::SomeException) ->
-                                           putStrLn ("hworker-ses callback raised exception: " <> show e))
+                                           log ("hworker-ses callback raised exception: " <> show e))
                                   return Success
 
 data SESConfig a =
@@ -135,8 +136,7 @@ create :: (ToJSON a, FromJSON a, Show a)
        -> (SESJob a -> IO ())
        -> IO (SESWorkerWith a)
 create name limit source after =
-  do recents <- newMVar []
-     Hworker.create name (SESState limit source recents after)
+  createWith (defaultSESConfig name limit source after)
 
 createWith :: (ToJSON a, FromJSON a, Show a)
            => SESConfig a
@@ -145,7 +145,7 @@ createWith (SESConfig name limit source after logger failed redis) =
   do recents <- newMVar []
      Hworker.createWith
                (defaultHworkerConfig name
-                                     (SESState limit source recents after)) {
+                                     (SESState limit source recents after logger)) {
                                      hwconfigRedisConnectInfo = redis
                                     ,hwconfigFailedQueueSize = failed
                                     ,hwconfigLogger = logger
