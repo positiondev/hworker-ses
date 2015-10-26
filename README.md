@@ -29,13 +29,14 @@ your API calls rate limited, which isn't good.
 
 ## Usage
 
-The program is `example/Main.hs` is probably most of what you need to get
-started. In particular, you create an `hworker` (you need to give it a
-name for the queue - this should be shared by any servers that should be
-accessing the same queue and sending the same messages, though if you are
-sharing the redis server with other applications, this should be distinct).
-The third argument is the per-second rate limit for this server, and the
-last argument is the address that the messages are sent from.
+The program in the `example` directory is probably most of what you
+need to get started. In particular, you create an `hworker` (you need
+to give it a name for the queue - this should be shared by any servers
+that should be accessing the same queue and sending the same messages,
+though if you are sharing the redis server with other applications,
+this should be distinct).  The third argument is the per-second rate
+limit for this server, and the last argument is the address that the
+messages are sent from.
 
 Using what you get back, you can spawn workers and a monitor. Then you
 can queue as many messages as you want, and they will be sent out by
@@ -50,7 +51,7 @@ there to be a monitor elsewhere). Having many workers makes things run
 faster. In particular, if you have a high sending limit, you will
 probably want several workers.
 
-As specified in the [hworker](https://github.com/dbp/hworker)
+As specified in the [hworker](http://hackage.haskell.org/package/hworker)
 documentation, the semantics of this queue is at-least-once, so it's
 possible that messages can get sent multiple times in error conditions
 (like if an entire server crashes right after the message is sent, but
