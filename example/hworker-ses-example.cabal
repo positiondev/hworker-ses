@@ -1,0 +1,20 @@
+name:                hworker-ses-example
+version:             0.1.0.0
+synopsis:            Library for sending email with Amazon's SES and hworker
+homepage:            http://github.com/dbp/hworker-ses
+license:             ISC
+license-file:        LICENSE
+author:              Daniel Patterson
+maintainer:          dbp@dbpmail.net
+-- copyright:
+category:            Web
+build-type:          Simple
+cabal-version:       >=1.10
+
+executable hworker-ses-example
+   hs-source-dirs: src
+   default-language: Haskell2010
+   main-is: Main.hs
+   Build-depends: base
+                , hworker-ses
+                , text

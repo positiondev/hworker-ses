@@ -1,7 +1,7 @@
 ## About
 
 This is a library that facilitates sending email via AWS SES using the
-background processor [hworker](https://github.com/dbp/hworker). In
+background processor [hworker](http://hackage.haskell.org/package/hworker). In
 particular, it handles rate limiting (for sending rate currently, not
 daily quotas), as SES does not queue messages.
 
