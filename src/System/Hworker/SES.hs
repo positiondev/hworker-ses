@@ -26,7 +26,6 @@ import           Control.Concurrent.MVar (MVar, newMVar, putMVar, takeMVar)
 import           Control.Exception       (SomeException, catch)
 import           Control.Lens            (set)
 import           Control.Monad           (mzero)
-import           Control.Monad.Trans.AWS hiding (page)
 import           Data.Aeson              (FromJSON (..), ToJSON (..),
                                           Value (Object, String), object, (.:),
                                           (.=))
@@ -36,7 +35,11 @@ import           Data.Text               (Text)
 import qualified Data.Text               as T
 import           Data.Time.Clock         (UTCTime, diffUTCTime, getCurrentTime)
 import           GHC.Generics
+import           Network.AWS             (Credentials (Discover),
+                                          Region (NorthVirginia), newEnv,
+                                          runAWS, runResourceT, send)
 import           Network.AWS.SES         hiding (Success)
+import           Network.AWS.Types       (Error)
 import           System.Hworker          hiding (create, createWith)
 import qualified System.Hworker          as Hworker (create, createWith)
 
@@ -83,25 +86,27 @@ instance (ToJSON a, FromJSON a, Show a) => Job (SESState a) (SESJob a) where
        if count >= limit
           then putMVar recents active >> threadDelay 100000 >> job state j
           else do putMVar recents (now : active)
-                  awsenv <- getEnv NorthVirginia Discover
-                  r <- runAWST awsenv $
-                       send (sendEmail source
-                                       (set dToAddresses [to]
-                                                         destination)
-                                       (message (content subj)
-                                                (set bHtml
-                                                     (content <$> bhtml) $
-                                                 set bText
-                                                     (content <$> btxt)
-                                                     body)))
+                  awsenv <- newEnv NorthVirginia Discover
+                  r <- catch (runResourceT $ runAWS awsenv $
+                       do send (sendEmail source
+                                          (set dToAddresses [to]
+                                                            destination)
+                                          (message (content subj)
+                                                   (set bHTML
+                                                        (content <$> bhtml) $
+                                                    set bText
+                                                        (content <$> btxt)
+                                                        body)))
+                          return Success)
+                          (\(err::Error) ->
+                             do log err
+                                return (Failure (T.pack (show err))))
                   case r of
-                    Left err ->
-                      do log err
-                         return (Failure (T.pack (show err)))
-                    Right _ -> do catch (after j)
-                                        (\(e::SomeException) ->
-                                           log ("hworker-ses callback raised exception: " <> show e))
-                                  return Success
+                    Success -> catch (after j)
+                                     (\(e::SomeException) ->
+                                       log ("hworker-ses callback raised exception: " <> show e))
+                    _ -> return ()
+                  return r
 
 data SESConfig a =
      SESConfig { sesconfigName             :: Text
