@@ -2,7 +2,7 @@ name:                hworker-ses
 version:             0.1.1.0
 synopsis:            Library for sending email with Amazon's SES and hworker
 description:         See README.
-homepage:            http://github.com/dbp/hworker-ses
+homepage:            http://github.com/position/hworker-ses
 license:             ISC
 license-file:        LICENSE
 author:              Daniel Patterson
