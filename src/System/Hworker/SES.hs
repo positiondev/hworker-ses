@@ -6,7 +6,7 @@
 {-# LANGUAGE ScopedTypeVariables   #-}
 module System.Hworker.SES ( SESWorker
                           , SESWorkerWith
-                          , SESState
+                          , SESState(..)
                           , SESJob(..)
                           , SESConfig(..)
                           , RedisConnection(..)
@@ -20,12 +20,11 @@ module System.Hworker.SES ( SESWorker
     ) where
 
 import           Control.Applicative     ((<|>))
-import           Control.Arrow           ((&&&))
 import           Control.Concurrent      (threadDelay)
 import           Control.Concurrent.MVar (MVar, newMVar, putMVar, takeMVar)
 import           Control.Exception       (SomeException, catch)
 import           Control.Lens            (set)
-import           Control.Monad           (mzero)
+import           Control.Monad           (mzero, void)
 import           Data.Aeson              (FromJSON (..), ToJSON (..),
                                           Value (Object, String), object, (.:),
                                           (.=))
@@ -41,7 +40,7 @@ import           Network.AWS             (Credentials (Discover),
 import           Network.AWS.SES         hiding (Success)
 import           Network.AWS.Types       (Error)
 import           System.Hworker          hiding (create, createWith)
-import qualified System.Hworker          as Hworker (create, createWith)
+import qualified System.Hworker          as Hworker (createWith)
 
 type SESWorkerWith a = Hworker (SESState a) (SESJob a)
 type SESWorker = SESWorkerWith ()
@@ -50,7 +49,7 @@ data SESState a = SESState { sesLimit   :: Int
                            , sesSource  :: Text
                            , sesRecents :: MVar [UTCTime]
                            , sesAfter   :: SESJob a -> IO ()
-                           , sesLogger  :: forall a. Show a => a -> IO ()
+                           , sesLogger  :: forall b. Show b => b -> IO ()
                            }
 
 data SESJob a = SESJob { sesEmTo       :: Text
@@ -78,7 +77,7 @@ instance FromJSON a => FromJSON (SESJob a) where
   parseJSON _ = mzero
 
 instance (ToJSON a, FromJSON a, Show a) => Job (SESState a) (SESJob a) where
-  job state@(SESState limit source recents after log) j@(SESJob to subj btxt bhtml payload) =
+  job state@(SESState limit source recents after log') j@(SESJob to' subj btxt bhtml _payload) =
     do now <- getCurrentTime
        rs <- takeMVar recents
        let active = filter ((< 1) . diffUTCTime now) rs
@@ -88,8 +87,8 @@ instance (ToJSON a, FromJSON a, Show a) => Job (SESState a) (SESJob a) where
           else do putMVar recents (now : active)
                   awsenv <- newEnv NorthVirginia Discover
                   r <- catch (runResourceT $ runAWS awsenv $
-                       do send (sendEmail source
-                                          (set dToAddresses [to]
+                       do void $ send (sendEmail source
+                                          (set dToAddresses [to']
                                                             destination)
                                           (message (content subj)
                                                    (set bHTML
@@ -99,12 +98,12 @@ instance (ToJSON a, FromJSON a, Show a) => Job (SESState a) (SESJob a) where
                                                         body)))
                           return Success)
                           (\(err::Error) ->
-                             do log err
+                             do log' err
                                 return (Failure (T.pack (show err))))
                   case r of
                     Success -> catch (after j)
                                      (\(e::SomeException) ->
-                                       log ("hworker-ses callback raised exception: " <> show e))
+                                       log' ("hworker-ses callback raised exception: " <> show e))
                     _ -> return ()
                   return r
 
@@ -112,8 +111,8 @@ data SESConfig a =
      SESConfig { sesconfigName             :: Text
                , sesconfigLimit            :: Int
                , sesconfigSource           :: Text
-               , sesconfigAfter            :: (SESJob a -> IO ())
-               , sesconfigLogger           :: (forall a. Show a => a -> IO ())
+               , sesconfigAfter            :: SESJob a -> IO ()
+               , sesconfigLogger           :: forall b. Show b => b -> IO ()
                , sesconfigFailedQueueSize  :: Int
                , sesconfigRedisConnectInfo :: RedisConnection
                }
@@ -146,12 +145,12 @@ create name limit source after =
 createWith :: (ToJSON a, FromJSON a, Show a)
            => SESConfig a
            -> IO (SESWorkerWith a)
-createWith (SESConfig name limit source after logger failed redis) =
+createWith (SESConfig name limit source after logger failed' redis) =
   do recents <- newMVar []
      Hworker.createWith
                (defaultHworkerConfig name
                                      (SESState limit source recents after logger)) {
                                      hwconfigRedisConnectInfo = redis
-                                    ,hwconfigFailedQueueSize = failed
+                                    ,hwconfigFailedQueueSize = failed'
                                     ,hwconfigLogger = logger
                }
