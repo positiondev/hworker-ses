@@ -5,8 +5,5 @@ packages:
 - location:
     git: https://github.com/dbp/hworker
     commit: 58bea58a203f38d510372411c85c24f79b93dd68
-extra-deps:
-- amazonka-1.3.5
-- amazonka-core-1.3.5
-- amazonka-ses-1.3.5
-resolver: lts-3.10
+extra-deps: []
+resolver: lts-8.15

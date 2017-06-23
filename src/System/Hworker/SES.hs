@@ -3,6 +3,7 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 module System.Hworker.SES ( SESWorker
                           , SESWorkerWith
@@ -85,7 +86,11 @@ instance (ToJSON a, FromJSON a, Show a) => Job (SESState a) (SESJob a) where
        if count >= limit
           then putMVar recents active >> threadDelay 100000 >> job state j
           else do putMVar recents (now : active)
+#if MIN_VERSION_amazonka(1,4,4)
+                  awsenv <- newEnv Discover
+#else
                   awsenv <- newEnv NorthVirginia Discover
+#endif
                   r <- catch (runResourceT $ runAWS awsenv $
                        do void $ send (sendEmail source
                                           (set dToAddresses [to']
