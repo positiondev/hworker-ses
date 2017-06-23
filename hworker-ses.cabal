@@ -1,5 +1,5 @@
 name:                hworker-ses
-version:             0.1.1.0
+version:             0.1.1.1
 synopsis:            Library for sending email with Amazon's SES and hworker
 description:         See README.
 homepage:            http://github.com/position/hworker-ses
