@@ -21,9 +21,9 @@ library
                      , time
                      , aeson
                      , text
-                     , amazonka >= 1
-                     , amazonka-core >= 1
-                     , amazonka-ses >= 1
+                     , amazonka >= 1.4.4
+                     , amazonka-core >= 1.4.4
+                     , amazonka-ses >= 1.4.4
                      , lens
                      , unordered-containers
   default-language:    Haskell2010
