@@ -85,22 +85,21 @@ instance (ToJSON a, FromJSON a, Show a) => Job (SESState a) (SESJob a) where
           then putMVar recents active >> threadDelay 100000 >> job state j
           else do putMVar recents (now : active)
                   awsenv <- newEnv Discover
-                  r <- catch (runResourceT $ runAWS awsenv $
-                       do void $ send (sendEmail source
-                                          (set dToAddresses [to']
-                                                            destination)
+                  r <- catch
+                       (runResourceT $ runAWS awsenv $
+                         do void $ send (sendEmail source
+                                          (set dToAddresses [to'] destination)
                                           (message (content subj)
-                                                   (set bHTML
-                                                        (content <$> bhtml) $
-                                                    set bText
-                                                        (content <$> btxt)
-                                                        body)))
-                          return Success)
-                          (\(err::Error) ->
+                                            (set bHTML (content <$> bhtml) $
+                                              set bText (content <$> btxt)
+                                              body)))
+                            return Success)
+                       (\(err::Error) ->
                              do log' err
                                 return (Failure (T.pack (show err))))
                   case r of
-                    Success -> catch (after j)
+                    Success -> catch (do after j
+                                         log' $ "MAILING_LIST: sent and logged message to: " <> to' <> " with subject line: " <> subj)
                                      (\(e::SomeException) ->
                                        log' ("hworker-ses callback raised exception: " <> show e))
                     _ -> return ()
