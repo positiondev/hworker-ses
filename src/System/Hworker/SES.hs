@@ -84,6 +84,7 @@ instance (ToJSON a, FromJSON a, Show a) => Job (SESState a) (SESJob a) where
        if count >= limit
           then putMVar recents active >> threadDelay 100000 >> job state j
           else do putMVar recents (now : active)
+                  log' $ "MAILING_LIST: SEND_ATTEMPT to: " <> to' <> " subj: " <> subj
                   awsenv <- newEnv Discover
                   r <- catch
                        (runResourceT $ runAWS awsenv $
@@ -95,14 +96,15 @@ instance (ToJSON a, FromJSON a, Show a) => Job (SESState a) (SESJob a) where
                                               body)))
                             return Success)
                        (\(err::Error) ->
-                             do log' err
+                             do log' $ "MAILING_LIST PERMANENT_FAIL to: " <> to' <> " subj: " <> subj <> " err: " <> (T.pack $ show err)
                                 return (Failure (T.pack (show err))))
                   case r of
                     Success -> catch (do after j
-                                         log' $ "MAILING_LIST: sent and logged message to: " <> to' <> " with subject line: " <> subj)
+                                         log' $ "MAILING_LIST SEND_SUCCESS to: " <> to' <> " subj: " <> subj)
                                      (\(e::SomeException) ->
                                        log' ("hworker-ses callback raised exception: " <> show e))
-                    _ -> return ()
+                    _ -> do log' $ "MAILING_LIST PERMANENT_FAIL_2 to: " <> to' <> " subj: " <> subj
+                            return ()
                   return r
 
 data SESConfig a =
